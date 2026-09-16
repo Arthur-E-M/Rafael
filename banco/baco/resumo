@@ -1,0 +1,556 @@
+# Atividade Prática: SQL e Modelagem de Dados
+
+UNIPAM · Sistemas de Banco de Dados I · 16/09/2026
+Referência: ELMASRI, R.; NAVATHE, S. *Sistemas de Banco de Dados*. 7. ed. Pearson (capítulos 3, 4, 6 e 7).
+
+> Dica: no VS Code, abra este arquivo e aperte **Ctrl+Shift+V** para ver a versão formatada.
+
+---
+
+## 1. SQL Básica
+
+**Resposta:**
+SQL (Structured Query Language) é a linguagem padrão dos bancos de dados relacionais. Ela é **declarativa**: você diz **o que** quer, e o SGBD (Sistema Gerenciador de Banco de Dados) decide **como** buscar.
+
+**Explicação:** os comandos são divididos em grupos.
+
+| Grupo | Nome | Para que serve | Comandos |
+|---|---|---|---|
+| DDL | Linguagem de Definição de Dados | cria e muda a **estrutura** (esquema) | `CREATE`, `ALTER`, `DROP` |
+| DML | Linguagem de Manipulação de Dados | mexe nos **dados** (instância) | `INSERT`, `UPDATE`, `DELETE` |
+| Consulta | Recuperação de dados | lê os dados | `SELECT` |
+| Controle de transação | | confirma ou desfaz | `BEGIN`, `COMMIT`, `ROLLBACK` |
+
+Termos do modelo relacional usados no SQL:
+
+| Modelo relacional | SQL |
+|---|---|
+| relação | tabela |
+| tupla | linha |
+| atributo | coluna |
+
+---
+
+## 2. Definições e tipos de dados em SQL
+
+**Resposta:**
+Toda coluna tem um **tipo de dado**, que define que valores ela aceita. O conjunto de valores permitidos se chama **domínio**.
+
+| Categoria | Tipos | Exemplo |
+|---|---|---|
+| Número inteiro | `SMALLINT`, `INTEGER`, `BIGINT` | `85` |
+| Número exato | `NUMERIC(p,s)` ou `DECIMAL(p,s)` | `NUMERIC(10,2)` → `150.55` |
+| Número aproximado | `REAL`, `DOUBLE PRECISION` | `3.14159` |
+| Texto de tamanho fixo | `CHAR(n)` | `CHAR(11)` → CPF |
+| Texto de tamanho variável | `VARCHAR(n)`, `TEXT` | `'Direito'` |
+| Lógico | `BOOLEAN` | `TRUE`, `FALSE` |
+| Data e hora | `DATE`, `TIME`, `TIMESTAMP` | `'2025-09-01'` |
+| Intervalo de tempo | `INTERVAL` | `'3 days'` |
+
+**Explicação:**
+- Em `NUMERIC(10,2)`, **10** é a precisão (total de dígitos) e **2** é a escala (dígitos depois da vírgula).
+- Dinheiro sempre em `NUMERIC`. `REAL` e `DOUBLE` erram centavos.
+- Datas no formato `'AAAA-MM-DD'`.
+
+```sql
+-- Definição de tabela (DDL)
+CREATE TABLE vendas_itens2 (
+    id             INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    venda_id       INTEGER       NOT NULL,
+    produto_id     INTEGER       NOT NULL,
+    quantidade     NUMERIC(10,3) NOT NULL,
+    unidade        TEXT          NOT NULL,
+    valor_unitario NUMERIC(10,2) NOT NULL,
+    data_venda     DATE          NOT NULL
+);
+
+-- Domínio: um tipo com regra, reutilizável em várias tabelas
+CREATE DOMAIN dinheiro AS NUMERIC(10,2) CHECK (VALUE >= 0);
+```
+
+---
+
+## 3. Especificação de restrições em SQL
+
+**Resposta:**
+Restrições são **regras** que o banco obriga a cumprir. Se um dado não passa na regra, o comando é recusado.
+
+| Restrição | O que garante |
+|---|---|
+| `NOT NULL` | o campo é obrigatório |
+| `DEFAULT <valor>` | valor usado quando nenhum é informado |
+| `CHECK (<condição>)` | só aceita valores que passam no teste |
+| `PRIMARY KEY` | chave primária: identifica a linha, não repete, não é nula (**integridade de entidade**) |
+| `UNIQUE` | chave candidata: não repete |
+| `FOREIGN KEY ... REFERENCES` | chave estrangeira: o valor precisa existir na outra tabela (**integridade referencial**) |
+
+**Ações da chave estrangeira** (o que acontece quando o pai é apagado ou alterado):
+
+| Ação | Efeito |
+|---|---|
+| `NO ACTION` / `RESTRICT` (padrão) | recusa a operação |
+| `CASCADE` | apaga ou altera os filhos junto |
+| `SET NULL` | coloca NULL na coluna dos filhos |
+| `SET DEFAULT` | coloca o valor padrão nos filhos |
+
+```sql
+CREATE TABLE curso (
+    id_curso INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    nome     VARCHAR(60) NOT NULL UNIQUE
+);
+
+CREATE TABLE aluno (
+    id_aluno INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    nome     VARCHAR(80) NOT NULL,
+    ativo    BOOLEAN     NOT NULL DEFAULT TRUE,
+    id_curso INTEGER     NOT NULL,
+    CONSTRAINT fk_aluno_curso
+        FOREIGN KEY (id_curso) REFERENCES curso(id_curso)
+        ON DELETE RESTRICT
+        ON UPDATE CASCADE
+);
+
+-- Restrição com nome, criada depois
+ALTER TABLE vendas_itens2
+    ADD CONSTRAINT ck_quantidade_positiva CHECK (quantidade > 0);
+```
+
+**Explicação:** dar nome à restrição (`CONSTRAINT <nome>`) facilita remover depois (`ALTER TABLE ... DROP CONSTRAINT <nome>`) e deixa a mensagem de erro mais clara.
+
+---
+
+## 4. Consulta de recuperação básica em SQL
+
+**Resposta:**
+A consulta básica tem a forma **SELECT - FROM - WHERE**:
+
+```sql
+SELECT <lista de atributos>   -- o que mostrar (projeção)
+FROM   <lista de tabelas>     -- de onde
+WHERE  <condição>;            -- quais linhas (seleção)
+```
+
+**Explicação:**
+- Uma tabela SQL é um **multiconjunto**: aceita linhas repetidas no resultado. Para remover repetições, use `DISTINCT`.
+- `*` mostra todas as colunas.
+- `AS` cria apelidos para colunas e tabelas.
+- Operadores no `WHERE`: `= <> < > <= >=`, `AND`, `OR`, `NOT`, `BETWEEN`, `IN`, `LIKE`, `IS NULL`.
+- Ordem de execução: `FROM` → `WHERE` → `GROUP BY` → `HAVING` → `SELECT` → `ORDER BY` → `LIMIT`.
+
+```sql
+-- Itens da venda 2001
+SELECT produto_id, quantidade, valor_unitario
+FROM vendas_itens2
+WHERE venda_id = 2001;
+
+-- Sem repetição, ordenado
+SELECT DISTINCT unidade
+FROM vendas_itens2
+ORDER BY unidade;
+
+-- Com agregação
+SELECT venda_id, ROUND(SUM(quantidade * valor_unitario), 2) AS total
+FROM vendas_itens2
+GROUP BY venda_id
+HAVING SUM(quantidade * valor_unitario) > 400
+ORDER BY total DESC;
+
+-- Juntando duas tabelas
+SELECT a.nome AS aluno, c.nome AS curso
+FROM aluno a
+JOIN curso c ON c.id_curso = a.id_curso;
+```
+
+---
+
+## 5. Instruções INSERT, DELETE e UPDATE em SQL
+
+**Resposta:**
+
+| Comando | Faz | Forma |
+|---|---|---|
+| `INSERT` | adiciona linhas | `INSERT INTO t (c1, c2) VALUES (v1, v2);` |
+| `UPDATE` | altera linhas | `UPDATE t SET c1 = v1 WHERE <condição>;` |
+| `DELETE` | remove linhas | `DELETE FROM t WHERE <condição>;` |
+
+```sql
+INSERT INTO curso (nome) VALUES ('Engenharia de Software');
+
+UPDATE vendas_itens2
+SET valor_unitario = 230.00
+WHERE produto_id = 4;
+
+DELETE FROM aluno WHERE id_curso = 3;   -- filhos primeiro
+DELETE FROM curso WHERE id_curso = 3;   -- pai depois
+```
+
+**Explicação:**
+- **Sem `WHERE`**, o `UPDATE` e o `DELETE` afetam **todas** as linhas.
+- Os três comandos respeitam as restrições do tópico 3. Exemplo: apagar um curso que ainda tem alunos é recusado pela chave estrangeira.
+- Boa prática: testar o `WHERE` com um `SELECT` antes, e usar `BEGIN` / `ROLLBACK` / `COMMIT`.
+
+---
+
+## 6. Modelagem de dados usando o modelo Entidade-Relacionamento (ER)
+
+**Resposta:**
+O modelo ER é um modelo **conceitual** que descreve os dados como **entidades**, **atributos** e **relacionamentos**. Ele é usado na fase de projeto, antes de criar as tabelas.
+
+**Explicação:** fases do projeto de um banco de dados:
+
+| Fase | Resultado |
+|---|---|
+| 1. Levantamento de requisitos | descrição do minimundo em texto |
+| 2. Projeto conceitual | **diagrama ER** |
+| 3. Projeto lógico (mapeamento) | tabelas do modelo relacional |
+| 4. Projeto físico | índices, armazenamento, `CREATE TABLE` |
+
+Exemplo: "Um curso possui vários alunos. Cada aluno pertence a um curso."
+→ Entidades: CURSO, ALUNO. Relacionamento: POSSUI (1:N).
+
+---
+
+## 7. Modelos de dados conceituais de alto nível
+
+**Resposta:**
+São modelos **próximos de como as pessoas entendem os dados**, sem detalhes de como o computador guarda. Não dependem de um SGBD específico. O modelo ER é o principal exemplo.
+
+**Explicação:** categorias de modelos de dados:
+
+| Nível | Também chamado | Mostra | Exemplo |
+|---|---|---|---|
+| Alto nível | conceitual | conceitos do mundo real | modelo ER / EER |
+| Representacional | de implementação / lógico | estrutura entendida pelo usuário e pelo SGBD | modelo relacional (tabelas) |
+| Baixo nível | físico | como os dados ficam no disco | arquivos, índices |
+
+Vantagem do alto nível: facilita a conversa com o cliente, que não precisa saber SQL.
+
+---
+
+## 8. Tipos de entidades, conjuntos de entidades, atributos e chaves
+
+**Resposta:**
+
+| Conceito | Definição | Exemplo |
+|---|---|---|
+| Entidade | uma "coisa" do mundo real com existência própria | a aluna Ana Beatriz |
+| Tipo de entidade | grupo de entidades com os mesmos atributos (o "molde") | ALUNO |
+| Conjunto de entidades | todas as entidades de um tipo em um momento | os 5 alunos cadastrados hoje |
+| Atributo | propriedade que descreve a entidade | nome, id_curso |
+| Atributo-chave | atributo com valor único para cada entidade | id_aluno (sublinhado no diagrama) |
+| Domínio (conjunto de valores) | valores que o atributo pode receber | nota: 0 a 100 |
+
+**Tipos de atributo:**
+
+| Tipo | Significado | Exemplo | No diagrama |
+|---|---|---|---|
+| Simples (atômico) | não se divide | CPF | oval |
+| Composto | dividido em partes | Endereço (rua, número, cidade) | oval com ovais ligados |
+| Monovalorado | um valor só | data de nascimento | oval |
+| Multivalorado | vários valores | telefones | **oval duplo** |
+| Armazenado | guardado no banco | data de nascimento | oval |
+| Derivado | calculado a partir de outro | idade | **oval tracejado** |
+| Nulo | sem valor (não se aplica ou não se sabe) | complemento do endereço | — |
+
+**Explicação:** um tipo de entidade pode ter **mais de uma** chave (ex.: id e CPF). Cada uma se chama chave candidata. No SQL, uma vira `PRIMARY KEY` e as outras viram `UNIQUE`.
+
+---
+
+## 9. Tipos e conjuntos de relacionamentos, papéis e restrições estruturais
+
+**Resposta:**
+
+| Conceito | Definição | Exemplo |
+|---|---|---|
+| Tipo de relacionamento | ligação entre tipos de entidade | POSSUI (CURSO – ALUNO) |
+| Conjunto de relacionamentos | as ligações existentes em um momento | "Direito possui Eduardo" |
+| Grau | quantos tipos de entidade participam | binário (2), ternário (3) |
+| Papel | a função de cada entidade no relacionamento | supervisor / supervisionado |
+| Relacionamento recursivo | o mesmo tipo de entidade participa 2 vezes, com papéis diferentes | FUNCIONARIO supervisiona FUNCIONARIO |
+| Atributo de relacionamento | dado que pertence à ligação | nota em ALUNO–CURSA–DISCIPLINA |
+
+**Restrições estruturais** (duas):
+
+1. **Razão de cardinalidade:** número máximo de ligações.
+
+| Razão | Leitura | Exemplo |
+|---|---|---|
+| 1:1 | um para um | FUNCIONARIO gerencia DEPARTAMENTO |
+| 1:N | um para muitos | CURSO possui ALUNO |
+| M:N | muitos para muitos | ALUNO cursa DISCIPLINA |
+
+2. **Restrição de participação:** número mínimo.
+
+| Tipo | Significado | No diagrama |
+|---|---|---|
+| Total (dependência de existência) | toda entidade precisa participar | **linha dupla** |
+| Parcial | pode não participar | linha simples |
+
+Exemplo: todo aluno precisa ter curso (total do lado ALUNO). Um curso pode ficar sem aluno (parcial do lado CURSO).
+
+**Explicação:** notação alternativa **(mín, máx)**: ALUNO (1,1) — POSSUI — (0,N) CURSO. Lê-se: cada aluno participa no mínimo 1 e no máximo 1 vez; cada curso participa de 0 a N vezes.
+
+**Mapeamento para tabelas:**
+- 1:N → a chave do lado 1 vai como chave estrangeira para o lado N.
+- M:N → cria uma tabela nova com as duas chaves.
+- 1:1 → a chave estrangeira vai para um dos lados (de preferência o de participação total).
+
+```sql
+-- M:N: aluno cursa disciplina, com atributo do relacionamento (nota)
+CREATE TABLE cursa (
+    id_aluno      INTEGER NOT NULL REFERENCES aluno(id_aluno),
+    id_disciplina INTEGER NOT NULL REFERENCES disciplina(id_disciplina),
+    nota          NUMERIC(5,2),
+    PRIMARY KEY (id_aluno, id_disciplina)
+);
+```
+
+---
+
+## 10. Tipos de entidade fraca
+
+**Resposta:**
+Entidade fraca é uma entidade que **não tem chave própria** e **depende de outra** (a entidade **proprietária**) para ser identificada.
+
+| Conceito | Significado |
+|---|---|
+| Entidade proprietária (forte) | a entidade da qual a fraca depende |
+| Relacionamento identificador | liga a fraca à proprietária |
+| Chave parcial | atributo que identifica a fraca **dentro** de uma proprietária |
+| Chave completa | chave da proprietária + chave parcial |
+
+**No diagrama:** retângulo **duplo** (entidade fraca), losango **duplo** (relacionamento identificador), chave parcial com sublinhado **tracejado**. A participação da fraca é sempre **total**.
+
+**Exemplo:** DEPENDENTE de FUNCIONARIO. "Dependente Maria" não identifica ninguém sozinho. "Dependente Maria do funcionário 10" identifica.
+
+```sql
+CREATE TABLE contato_aluno (
+    id_aluno       INTEGER NOT NULL REFERENCES aluno(id_aluno) ON DELETE CASCADE,
+    numero_contato INTEGER NOT NULL,          -- chave parcial
+    telefone       VARCHAR(20) NOT NULL,
+    PRIMARY KEY (id_aluno, numero_contato)    -- proprietária + parcial
+);
+```
+
+**Explicação:** `ON DELETE CASCADE` representa a dependência de existência: se o aluno for apagado, os contatos dele também são.
+
+---
+
+## 11. Diagrama ER, convenções de nomes e questões de projeto
+
+**Resposta: símbolos do diagrama ER**
+
+| Símbolo | Significa |
+|---|---|
+| Retângulo | tipo de entidade |
+| Retângulo duplo | entidade fraca |
+| Losango | tipo de relacionamento |
+| Losango duplo | relacionamento identificador |
+| Oval | atributo |
+| Oval com texto sublinhado | atributo-chave |
+| Oval com sublinhado tracejado | chave parcial |
+| Oval duplo | atributo multivalorado |
+| Oval tracejado | atributo derivado |
+| Ovais ligados a um oval | atributo composto |
+| Linha simples / dupla | participação parcial / total |
+| 1, N, M nas linhas | razão de cardinalidade |
+
+```
+  (id_curso)  (nome)                     (id_aluno)  (nome)
+       \        /                             \        /
+     ┌──────────┐  1   ◇───────◇   N   ┌──────────┐
+     │  CURSO   │──────◇ POSSUI ◇══════│  ALUNO   │
+     └──────────┘      ◇───────◇       └──────────┘
+                                  (linha dupla = participação total)
+```
+
+**Convenções de nomes:**
+- Tipo de entidade: **substantivo no singular**, em maiúsculas (ALUNO, CURSO).
+- Relacionamento: **verbo**, em maiúsculas (POSSUI, CURSA).
+- Atributo: substantivo (nome, data_venda).
+- O diagrama deve ser lido da **esquerda para a direita** e de **cima para baixo**.
+
+**Questões de projeto (decisões comuns):**
+
+| Dúvida | Orientação |
+|---|---|
+| Atributo ou entidade? | se o conceito tem atributos próprios ou se liga a várias entidades, vira **entidade** (ex.: "curso" como texto → entidade CURSO) |
+| Atributo ou relacionamento? | um atributo que guarda a chave de outra entidade (ex.: id_curso em ALUNO) deve virar **relacionamento** no modelo ER |
+| Entidade fraca ou forte? | se não tem identificação própria e depende de outra, é **fraca** |
+| Binário ou ternário? | ver tópico 12 |
+
+**Explicação:** o projeto é **iterativo**: o diagrama é revisado várias vezes até representar bem o minimundo.
+
+---
+
+## 12. Tipos de relacionamentos de grau maior que dois
+
+**Resposta:**
+São relacionamentos que ligam **3 ou mais** tipos de entidade ao mesmo tempo. O de grau 3 se chama **ternário**.
+
+**Exemplo:** PROFESSOR **leciona** DISCIPLINA em um CURSO.
+
+```
+┌───────────┐         ┌──────────────┐
+│ PROFESSOR │────◇ LECIONA ◇────│ DISCIPLINA │
+└───────────┘        │        └──────────────┘
+                     │
+                ┌─────────┐
+                │  CURSO  │
+                └─────────┘
+```
+
+**Explicação:**
+- Um ternário **não é igual** a três relacionamentos binários. Com três binários você sabe que "Marcos dá Banco de Dados" e que "Marcos trabalha em Sistemas", mas **não** sabe em qual curso ele dá essa disciplina.
+- Às vezes se usa o ternário **e** alguns binários juntos, quando existem regras extras.
+- Também pode ser representado como uma **entidade fraca** ligada às três entidades.
+
+```sql
+CREATE TABLE leciona (
+    id_professor  INTEGER NOT NULL REFERENCES professor(id_professor),
+    id_disciplina INTEGER NOT NULL REFERENCES disciplina(id_disciplina),
+    id_curso      INTEGER NOT NULL REFERENCES curso(id_curso),
+    PRIMARY KEY (id_professor, id_disciplina, id_curso)
+);
+```
+
+**Mapeamento:** vira uma tabela com as chaves das 3 entidades.
+
+---
+
+## 13. O modelo Entidade-Relacionamento Estendido (EER)
+
+**Resposta:**
+O EER é o modelo ER com **conceitos a mais**, para representar situações mais complexas.
+
+| Conceito novo | Significado |
+|---|---|
+| Subclasse / superclasse | tipos mais específicos dentro de um tipo geral |
+| Herança | a subclasse recebe os atributos e relacionamentos da superclasse |
+| Especialização | dividir uma superclasse em subclasses |
+| Generalização | juntar entidades parecidas em uma superclasse |
+| Restrições de disjunção e completude | regras sobre a qual subclasse uma entidade pertence |
+| Categoria (tipo união) | subclasse de **várias** superclasses diferentes (ex.: PROPRIETARIO pode ser PESSOA ou EMPRESA) |
+
+**Explicação:** o EER foi criado porque aplicações mais novas (engenharia, sistemas geográficos, etc.) precisavam representar tipos e subtipos, algo que o ER básico não mostra bem.
+
+---
+
+## 14. Subclasses, superclasses e herança
+
+**Resposta:**
+- **Superclasse:** tipo de entidade geral. Ex.: PESSOA (nome, CPF).
+- **Subclasse:** subgrupo com características próprias. Ex.: ESTUDANTE (matrícula) e DOCENTE (titulação).
+- A relação entre elas se chama **É-UM** (IS-A): "todo estudante **é uma** pessoa".
+- **Herança:** a subclasse recebe **todos** os atributos e relacionamentos da superclasse, e pode ter os seus próprios (atributos **locais**).
+
+```
+            ┌──────────┐
+            │  PESSOA  │  (nome, cpf)
+            └────┬─────┘
+                 │
+                ( d )        d = disjunta
+               /     \
+   ┌───────────┐     ┌──────────┐
+   │ ESTUDANTE │     │ DOCENTE  │
+   └───────────┘     └──────────┘
+    (matricula)       (titulacao)
+```
+
+**Explicação:**
+- Uma entidade da subclasse e a da superclasse são a **mesma** coisa do mundo real, vista em papéis diferentes.
+- Uma entidade não pode existir só na subclasse: todo estudante também está em PESSOA.
+- Se uma subclasse tem **uma** superclasse, forma uma **hierarquia**. Se tem **várias** (herança múltipla), forma um **reticulado** (lattice), e ela se chama **subclasse compartilhada**.
+
+```sql
+CREATE TABLE pessoa (
+    id_pessoa INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    nome      VARCHAR(80) NOT NULL,
+    cpf       CHAR(11)    NOT NULL UNIQUE
+);
+
+CREATE TABLE estudante (
+    id_pessoa INTEGER PRIMARY KEY REFERENCES pessoa(id_pessoa),  -- mesma chave da superclasse
+    matricula VARCHAR(20) NOT NULL UNIQUE
+);
+
+CREATE TABLE docente (
+    id_pessoa INTEGER PRIMARY KEY REFERENCES pessoa(id_pessoa),
+    titulacao VARCHAR(30) NOT NULL
+);
+
+-- Herança na consulta: nome e cpf vêm da superclasse
+SELECT p.nome, p.cpf, e.matricula
+FROM pessoa p
+JOIN estudante e ON e.id_pessoa = p.id_pessoa;
+```
+
+---
+
+## 15. Especialização e generalização
+
+**Resposta:**
+
+| | Especialização | Generalização |
+|---|---|---|
+| Direção | de cima para baixo (top-down) | de baixo para cima (bottom-up) |
+| Parte de | uma superclasse | várias entidades parecidas |
+| Resultado | cria subclasses | cria uma superclasse |
+| Exemplo | PESSOA → ESTUDANTE, DOCENTE | CARRO + CAMINHAO → VEICULO |
+
+**Restrições:**
+
+| Restrição | Opções | No diagrama |
+|---|---|---|
+| Disjunção | **disjunta**: a entidade pertence a no máximo 1 subclasse | círculo com **d** |
+| | **sobreposta**: pode pertencer a várias | círculo com **o** (overlap) |
+| Completude | **total**: toda entidade pertence a alguma subclasse | linha **dupla** até o círculo |
+| | **parcial**: pode não pertencer a nenhuma | linha simples |
+
+Combinações possíveis: disjunta-total, disjunta-parcial, sobreposta-total, sobreposta-parcial.
+
+**Tipos de especialização:**
+- **Definida por atributo (por predicado):** a subclasse é decidida por um valor. Ex.: tipo_pessoa = 'E' → ESTUDANTE.
+- **Definida pelo usuário:** a pessoa que cadastra escolhe a subclasse.
+
+**Explicação: formas de transformar em tabelas**
+
+| Opção | Como fica | Quando usar |
+|---|---|---|
+| Uma tabela por classe | PESSOA + ESTUDANTE + DOCENTE (exemplo do tópico 14) | serve para qualquer caso |
+| Só as subclasses | ESTUDANTE e DOCENTE, cada uma com nome e cpf | especialização **total e disjunta** |
+| Tabela única com tipo | PESSOA com coluna `tipo` e colunas de todas as subclasses | poucas colunas específicas |
+
+```sql
+-- Tabela única com atributo de tipo (especialização definida por atributo, disjunta)
+CREATE TABLE pessoa_unica (
+    id_pessoa INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    nome      VARCHAR(80) NOT NULL,
+    cpf       CHAR(11)    NOT NULL UNIQUE,
+    tipo      CHAR(1)     NOT NULL CHECK (tipo IN ('E', 'D')),  -- E = estudante, D = docente
+    matricula VARCHAR(20),     -- só para estudante
+    titulacao VARCHAR(30)      -- só para docente
+);
+```
+
+---
+
+## Resumo geral
+
+| Tópico | Em uma frase |
+|---|---|
+| 1 | SQL é a linguagem padrão, dividida em DDL, DML e consulta |
+| 2 | cada coluna tem um tipo (INTEGER, NUMERIC, VARCHAR, DATE...) |
+| 3 | restrições são regras: NOT NULL, CHECK, PK, UNIQUE, FK |
+| 4 | consulta básica: SELECT - FROM - WHERE |
+| 5 | INSERT adiciona, UPDATE altera, DELETE remove (sempre com WHERE) |
+| 6 | modelo ER descreve entidades, atributos e relacionamentos |
+| 7 | modelo conceitual = próximo do usuário, independente do SGBD |
+| 8 | tipo de entidade é o molde; conjunto é o que existe agora; chave identifica |
+| 9 | relacionamentos têm grau, papéis, cardinalidade e participação |
+| 10 | entidade fraca depende da proprietária e usa chave parcial |
+| 11 | retângulo, losango, oval; entidades no singular, relacionamentos como verbo |
+| 12 | ternário liga 3 entidades e não equivale a 3 binários |
+| 13 | EER = ER + subclasses, herança, especialização, categorias |
+| 14 | subclasse "é uma" superclasse e herda tudo dela |
+| 15 | especialização desce, generalização sobe; disjunta/sobreposta, total/parcial |
